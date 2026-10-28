@@ -19,7 +19,8 @@
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:10px; }
   .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); margin:0 0 8px; font-weight:600; }
   .row { display:flex; justify-content:space-between; align-items:baseline; padding:4px 0; }
-  .row .k { color:var(--mut); } .row .v { font-weight:600; font-variant-numeric:tabular-nums; }
+  .row .k { color:var(--mut); padding-right:10px; } .row .v { font-weight:600; font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
+  .ap { display:block; font-size:11px; font-weight:400; color:var(--mut); }
   .big { font-size:26px; font-weight:700; } .d { font-size:13px; font-weight:600; margin-left:6px; }
   .up { color:var(--ok); } .down { color:var(--bad); } .zero { color:var(--mut); }
   .note { color:var(--mut); font-size:12px; margin-top:6px; }
@@ -32,7 +33,7 @@
 <h1>📊 Пульс клуба и сайта</h1>
 <div class="sub" id="sub">загружаю…</div>
 <div class="tabs" id="tabs" hidden>
-  <button data-p="1" class="on">Сутки</button><button data-p="7">7 дней</button><button data-p="30">30 дней</button>
+  <button data-p="1" class="on">Сегодня</button><button data-p="7">7 дней</button><button data-p="30">30 дней</button>
 </div>
 <div id="out"><div class="center">загружаю…</div></div>
 <script>
@@ -44,58 +45,78 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const n = (v) => (v === null || v === undefined ? "?" : Number(v).toLocaleString("ru-RU"));
 const day = (iso) => iso ? new Date(iso).toLocaleDateString("ru-RU", { timeZone: "Europe/Warsaw", day: "2-digit", month: "2-digit" }) : "";
 function delta(now, then) {
-  if (now == null || then == null) return '<span class="d zero">нет точки</span>';
+  if (now == null || then == null) return "";   // сравнить не с чем - ничего не показываем
   const d = now - then, cls = d > 0 ? "up" : d < 0 ? "down" : "zero";
   return `<span class="d ${cls}">${d > 0 ? "+" : d < 0 ? "-" : "±"}${Math.abs(d)}</span>`;
 }
+const signed = (v) => `<span class="${v > 0 ? "up" : v < 0 ? "down" : "zero"}">${v > 0 ? "+" : v < 0 ? "-" : "±"}${Math.abs(v)}</span>`;
 const row = (k, v) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`;
-const label = { "1": "за сутки", "7": "за 7 дней", "30": "за 30 дней" };
-function partial(sinceIso) {
+const label = { "1": "сегодня", "7": "за 7 дней", "30": "за 30 дней" };
+function partial(sinceIso, what) {
   if (!sinceIso) return "";
   const days = (Date.now() - new Date(sinceIso).getTime()) / 864e5;
-  return days < Number(P) ? `<div class="note">учёт с ${day(sinceIso)}: период неполный</div>` : "";
+  return days < Number(P) ? `<div class="note">${what ? esc(what) + ": " : ""}данные есть только с ${day(sinceIso)}, за этот период неполные</div>` : "";
 }
 function render() {
-  const d = DATA, now = d.now || {}, per = (d.periods || {})[P] || {}, since = d.since || {}, site = d.site;
+  const d = DATA, now = d.now || {}, per = (d.periods || {})[P] || {}, since = d.since || {}, site = d.site, club = d.club || {};
   const z = now.zenedu || {}, t = now.tribute || {}, ch = now.site_charges_7d || {}, pf = now.payment_fail || {}, ob = now.onboarding || {};
+  const num = (v) => Number(v || 0);
+  const cnt = ((d.counter || {})[P] || {}), c = cnt.counts || {}, ap = cnt.approx || {};
+  // «примерно, учёт с ДД.ММ», если период уходит раньше начала честного учёта этого числа
+  const aq = (...keys) => { const ds = keys.map((k) => ap[k]).filter(Boolean).sort(); return ds.length ? `<span class="ap">примерно, учёт с ${day(ds[ds.length - 1])}</span>` : ""; };
+  const v = (k) => n(c[k] || 0) + aq(k);
+  const came = num(c.came), gone = num(c.gone);
   let h = "";
-  h += `<div class="card"><h2>Клуб</h2>
-    <div class="row"><span class="k">Zenedu</span><span><span class="big">${n(z.active)}</span>${delta(z.active, per.zenedu_active_then)}</span></div>
-    ${partial(since.zenedu)}
-    <div class="row"><span class="k">Tribute (доступ идёт)</span><span><span class="big">${n(t.live)}</span>${delta(t.live, per.tribute_live_then)}</span></div>
-    ${row("Tribute новых " + label[P], n(per.tribute_new))}
-    ${row("Tribute продлений " + label[P], n(per.tribute_renewed))}
-    ${row("Tribute отмен " + label[P], n(per.tribute_cancelled))}
-    ${partial(since.tribute_events)}
-    <div class="note">Zenedu - по суточной сверке (06:40 UTC). Tribute - по подсказкам: у Tribute нет событий о неудачной оплате, срок доступа оценочный.</div></div>`;
+  h += `<div class="card"><h2>В клубе сейчас</h2>
+    <div class="row"><span class="k">Женщин с доступом</span><span class="big">${n(club.unique)}</span></div>
+    ${row("Пришло " + label[P], n(came) + aq("zenedu_came", "tribute_came"))}
+    ${row("Ушло " + label[P], n(gone) + aq("zenedu_cancel_self", "zenedu_cancel_payment", "zenedu_cancel_other", "tribute_ended"))}
+    ${row("Итог " + label[P], signed(came - gone) + aq("zenedu_came", "tribute_came", "zenedu_cancel_self", "tribute_ended"))}
+    <div class="note">Каждая женщина считается один раз, даже если платит и в Zenedu, и в Tribute (таких ${n(club.both)}).</div></div>`;
+  h += `<div class="card"><h2>Zenedu</h2>
+    <div class="row"><span class="k">Сейчас</span><span><span class="big">${n(z.active)}</span>${delta(z.active, per.zenedu_active_then)}</span></div>
+    ${row("Новых " + label[P], v("zenedu_came"))}
+    ${row("Продлений " + label[P], v("zenedu_renewed"))}
+    ${row("Отменила сама " + label[P], v("zenedu_cancel_self"))}
+    ${row("Не прошла оплата " + label[P], v("zenedu_cancel_payment"))}
+    ${num(c.zenedu_cancel_other) ? row("Другое (возврат, вручную) " + label[P], v("zenedu_cancel_other")) : ""}
+    <div class="note">Zenedu обновляется раз в день утром.</div></div>`;
+  h += `<div class="card"><h2>Tribute</h2>
+    <div class="row"><span class="k">Сейчас</span><span><span class="big">${n(t.live)}</span>${delta(t.live, per.tribute_live_then)}</span></div>
+    ${row("Новых " + label[P], v("tribute_came"))}
+    ${row("Продлений " + label[P], v("tribute_renewed"))}
+    ${row("Отключили продление " + label[P], v("tribute_autorenew_off"))}
+    ${row("Доступ закончился " + label[P], v("tribute_ended"))}
+    <div class="note">Tribute: число примерное. Tribute не сообщает, если оплата не прошла, поэтому конец доступа мы считаем сами.</div></div>`;
   if (site) {
     const a = site.active || {}, c = site.cancelledActive || {};
     const paying = (a.wayforpay || 0) + (a.lava || 0) + (a.tribute || 0), off = (c.wayforpay || 0) + (c.lava || 0) + (c.tribute || 0);
-    h += `<div class="card"><h2>Сайт (сейчас)</h2>
-      <div class="row"><span class="k">Платят</span><span class="big">${n(paying)}</span></div>
+    h += `<div class="card"><h2>Сайт</h2>
+      <div class="row"><span class="k">Платят сейчас</span><span class="big">${n(paying)}</span></div>
       ${row("WayForPay / Lava / Tribute", `${n(a.wayforpay)} / ${n(a.lava)} / ${n(a.tribute)}`)}
       ${row("Продление выключено", n(off))}
-      ${row("Списаний за 7 дней", n(ch.count) + (ch.first ? ", ближайшее " + day(ch.first) : ""))}
-      <div class="note">Без тестовых учёток (список исключений ведётся руками).</div></div>`;
+      ${row("Ближайшее списание", ch.next ? day(ch.next) : "нет")}
+      ${row("Списаний в ближайшие 7 дней", n(ch.count))}
+      <div class="note">Наши тестовые оплаты не считаются.</div></div>`;
   } else {
-    h += `<div class="card alarm"><h2>Сайт</h2>${row("Счётчик не ответил", "?")}</div>`;
+    h += `<div class="card alarm"><h2>Сайт</h2>${row("Не удалось получить цифры", "?")}</div>`;
   }
   h += `<div class="card"><h2>Сбои оплаты</h2>
-    <div class="row"><span class="k">Открыто сейчас</span><span class="big">${n(pf.open)}</span></div>
+    <div class="row"><span class="k">Ждут решения сейчас</span><span class="big">${n(pf.open)}</span></div>
     ${row("Новых " + label[P], n(per.pf_new))}
-    ${row("Восстановлено " + label[P], n(per.pf_recovered))}
-    ${row("Закрыто без оплаты " + label[P], n(per.pf_ended))}
+    ${row("Оплатили после сбоя " + label[P], n(per.pf_recovered))}
+    ${row("Так и не оплатили " + label[P], n(per.pf_ended))}
     ${partial(since.payment_fail)}</div>`;
   h += `<div class="card"><h2>Новенькие Tribute</h2>
     ${row("Сообщений ушло " + label[P], n(per.onb_sent))}
     ${row("Не дошло " + label[P], n(per.onb_not_delivered))}
-    ${row("Ждут «перед продлением»", n(ob.m2_waiting))}
+    ${row("Ждут сообщения перед продлением", n(ob.m2_waiting))}
     ${partial(since.onboarding)}</div>`;
   const al = [];
   const hrs = (iso) => iso ? (Date.now() - new Date(iso).getTime()) / 36e5 : Infinity;
-  if (hrs(z.last_sync) > 26) al.push("сверка Zenedu молчит " + (isFinite(hrs(z.last_sync)) ? Math.round(hrs(z.last_sync)) + " ч" : "давно"));
+  if (hrs(z.last_sync) > 26) al.push("Zenedu не обновлялся " + (isFinite(hrs(z.last_sync)) ? Math.round(hrs(z.last_sync)) + " ч" : "давно"));
   if (hrs(t.last_event) > 36) al.push("нет событий Tribute " + (isFinite(hrs(t.last_event)) ? Math.round(hrs(t.last_event)) + " ч" : "давно"));
-  if (!site) al.push("счётчик сайта не ответил");
+  if (!site) al.push("не пришли цифры сайта");
   h += al.length ? `<div class="card alarm"><h2>Тревоги</h2>${al.map((a) => row(a, "⚠️")).join("")}</div>`
                  : `<div class="card"><h2>Тревоги</h2>${row("Тревог нет", "✓")}</div>`;
   h += `<button class="refresh" onclick="load()">Обновить</button>`;
