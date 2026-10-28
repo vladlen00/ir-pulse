@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Пульс</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- Пульс клуба и сайта (28.10.2026). Данных в странице НЕТ: цифры отдаёт функция ops-pulse только после
+     проверки подписи initData и только двум Telegram id. Вне Телеграма страница пустая. -->
+<style>
+  :root { --bg:#0b0f14; --card:#141a22; --line:#232c38; --tx:#e6e9ee; --mut:#8b95a3; --acc:#7c9cff; --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:15px/1.4 -apple-system,Segoe UI,Roboto,sans-serif; padding:16px 14px 28px; }
+  h1 { font-size:20px; margin:0 0 4px; } .sub { color:var(--mut); font-size:12px; margin-bottom:14px; }
+  .tabs { display:flex; gap:6px; margin-bottom:14px; }
+  .tabs button { flex:1; border:1px solid var(--line); background:var(--card); color:var(--tx); border-radius:10px; padding:9px 0; font-size:14px; }
+  .tabs button.on { background:var(--acc); border-color:var(--acc); color:#0b0f14; font-weight:600; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:10px; }
+  .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); margin:0 0 8px; font-weight:600; }
+  .row { display:flex; justify-content:space-between; align-items:baseline; padding:4px 0; }
+  .row .k { color:var(--mut); } .row .v { font-weight:600; font-variant-numeric:tabular-nums; }
+  .big { font-size:26px; font-weight:700; } .d { font-size:13px; font-weight:600; margin-left:6px; }
+  .up { color:var(--ok); } .down { color:var(--bad); } .zero { color:var(--mut); }
+  .note { color:var(--mut); font-size:12px; margin-top:6px; }
+  .alarm { border-color:var(--warn); } .alarm .v { color:var(--warn); }
+  .center { text-align:center; color:var(--mut); padding:40px 10px; }
+  button.refresh { width:100%; border:1px solid var(--line); background:transparent; color:var(--mut); border-radius:10px; padding:10px; margin-top:6px; }
+</style>
+</head>
+<body>
+<h1>📊 Пульс клуба и сайта</h1>
+<div class="sub" id="sub">загружаю…</div>
+<div class="tabs" id="tabs" hidden>
+  <button data-p="1" class="on">Сутки</button><button data-p="7">7 дней</button><button data-p="30">30 дней</button>
+</div>
+<div id="out"><div class="center">загружаю…</div></div>
+<script>
+const FN = "https://kjzxrpwqyyjcykwbqskn.supabase.co/functions/v1/ops-pulse";
+const tg = window.Telegram && window.Telegram.WebApp;
+let DATA = null, P = "1";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const n = (v) => (v === null || v === undefined ? "?" : Number(v).toLocaleString("ru-RU"));
+const day = (iso) => iso ? new Date(iso).toLocaleDateString("ru-RU", { timeZone: "Europe/Warsaw", day: "2-digit", month: "2-digit" }) : "";
+function delta(now, then) {
+  if (now == null || then == null) return '<span class="d zero">нет точки</span>';
+  const d = now - then, cls = d > 0 ? "up" : d < 0 ? "down" : "zero";
+  return `<span class="d ${cls}">${d > 0 ? "+" : d < 0 ? "-" : "±"}${Math.abs(d)}</span>`;
+}
+const row = (k, v) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`;
+const label = { "1": "за сутки", "7": "за 7 дней", "30": "за 30 дней" };
+function partial(sinceIso) {
+  if (!sinceIso) return "";
+  const days = (Date.now() - new Date(sinceIso).getTime()) / 864e5;
+  return days < Number(P) ? `<div class="note">учёт с ${day(sinceIso)}: период неполный</div>` : "";
+}
+function render() {
+  const d = DATA, now = d.now || {}, per = (d.periods || {})[P] || {}, since = d.since || {}, site = d.site;
+  const z = now.zenedu || {}, t = now.tribute || {}, ch = now.site_charges_7d || {}, pf = now.payment_fail || {}, ob = now.onboarding || {};
+  let h = "";
+  h += `<div class="card"><h2>Клуб</h2>
+    <div class="row"><span class="k">Zenedu</span><span><span class="big">${n(z.active)}</span>${delta(z.active, per.zenedu_active_then)}</span></div>
+    ${partial(since.zenedu)}
+    <div class="row"><span class="k">Tribute (доступ идёт)</span><span><span class="big">${n(t.live)}</span>${delta(t.live, per.tribute_live_then)}</span></div>
+    ${row("Tribute новых " + label[P], n(per.tribute_new))}
+    ${row("Tribute продлений " + label[P], n(per.tribute_renewed))}
+    ${row("Tribute отмен " + label[P], n(per.tribute_cancelled))}
+    ${partial(since.tribute_events)}
+    <div class="note">Zenedu - по суточной сверке (06:40 UTC). Tribute - по подсказкам: у Tribute нет событий о неудачной оплате, срок доступа оценочный.</div></div>`;
+  if (site) {
+    const a = site.active || {}, c = site.cancelledActive || {};
+    const paying = (a.wayforpay || 0) + (a.lava || 0) + (a.tribute || 0), off = (c.wayforpay || 0) + (c.lava || 0) + (c.tribute || 0);
+    h += `<div class="card"><h2>Сайт (сейчас)</h2>
+      <div class="row"><span class="k">Платят</span><span class="big">${n(paying)}</span></div>
+      ${row("WayForPay / Lava / Tribute", `${n(a.wayforpay)} / ${n(a.lava)} / ${n(a.tribute)}`)}
+      ${row("Продление выключено", n(off))}
+      ${row("Списаний за 7 дней", n(ch.count) + (ch.first ? ", ближайшее " + day(ch.first) : ""))}
+      <div class="note">Без тестовых учёток (список исключений ведётся руками).</div></div>`;
+  } else {
+    h += `<div class="card alarm"><h2>Сайт</h2>${row("Счётчик не ответил", "?")}</div>`;
+  }
+  h += `<div class="card"><h2>Сбои оплаты</h2>
+    <div class="row"><span class="k">Открыто сейчас</span><span class="big">${n(pf.open)}</span></div>
+    ${row("Новых " + label[P], n(per.pf_new))}
+    ${row("Восстановлено " + label[P], n(per.pf_recovered))}
+    ${row("Закрыто без оплаты " + label[P], n(per.pf_ended))}
+    ${partial(since.payment_fail)}</div>`;
+  h += `<div class="card"><h2>Новенькие Tribute</h2>
+    ${row("Сообщений ушло " + label[P], n(per.onb_sent))}
+    ${row("Не дошло " + label[P], n(per.onb_not_delivered))}
+    ${row("Ждут «перед продлением»", n(ob.m2_waiting))}
+    ${partial(since.onboarding)}</div>`;
+  const al = [];
+  const hrs = (iso) => iso ? (Date.now() - new Date(iso).getTime()) / 36e5 : Infinity;
+  if (hrs(z.last_sync) > 26) al.push("сверка Zenedu молчит " + (isFinite(hrs(z.last_sync)) ? Math.round(hrs(z.last_sync)) + " ч" : "давно"));
+  if (hrs(t.last_event) > 36) al.push("нет событий Tribute " + (isFinite(hrs(t.last_event)) ? Math.round(hrs(t.last_event)) + " ч" : "давно"));
+  if (!site) al.push("счётчик сайта не ответил");
+  h += al.length ? `<div class="card alarm"><h2>Тревоги</h2>${al.map((a) => row(a, "⚠️")).join("")}</div>`
+                 : `<div class="card"><h2>Тревоги</h2>${row("Тревог нет", "✓")}</div>`;
+  h += `<button class="refresh" onclick="load()">Обновить</button>`;
+  $("out").innerHTML = h;
+  $("sub").textContent = "обновлено " + new Date(d.generated_at || Date.now()).toLocaleString("ru-RU", { timeZone: "Europe/Warsaw", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + " по Варшаве";
+}
+async function load() {
+  const initData = tg && tg.initData;
+  if (!initData) { $("sub").textContent = ""; $("out").innerHTML = '<div class="center">Открой «Пульс» кнопкой из Телеграма.</div>'; return; }
+  try {
+    const r = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 403) { $("out").innerHTML = '<div class="center">Нет доступа.</div>'; $("sub").textContent = ""; return; }
+    if (!r.ok || !j.ok) throw new Error(j.error || r.status);
+    DATA = j.data; $("tabs").hidden = false; render();
+  } catch (e) {
+    $("out").innerHTML = '<div class="center">Не удалось загрузить. <button class="refresh" onclick="load()">Повторить</button></div>';
+  }
+}
+document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b)); P = b.dataset.p; if (DATA) render();
+}));
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("#0b0f14"); tg.setBackgroundColor("#0b0f14"); } catch (e) {} }
+load();
+</script>
+</body>
+</html>
