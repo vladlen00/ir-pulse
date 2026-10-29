@@ -73,6 +73,7 @@ function render() {
     ${row("Ушло " + label[P], n(gone) + aq("zenedu_cancel_self", "zenedu_cancel_payment", "zenedu_cancel_other", "tribute_ended"))}
     ${row("Итог " + label[P], signed(came - gone) + aq("zenedu_came", "tribute_came", "zenedu_cancel_self", "tribute_ended"))}
     ${club.manual ? row("из них вручную (оплата мимо Zenedu и Tribute)", n(club.manual)) : ""}
+    ${num(now.site_in_club) ? row("из них платят на сайте (есть и в «Сайт»)", n(now.site_in_club)) : ""}
     ${d.channel_now != null ? row("В канале (по Телеграму)", n(d.channel_now)) : ""}
     ${(d.channel || {}).unpaid != null ? row("из них без оплаты в системах", n(d.channel.unpaid) + `<span class="ap">по сверке ${day(d.channel.day)}, в канале тогда было ${n(d.channel.members_at_check)}</span>`) : ""}
     <div class="note">Каждая женщина считается один раз, даже если платит и в Zenedu, и в Tribute (таких ${n(club.both)}). Сюда входят и те, кто отменил продление, но оплаченный срок ещё идёт. И те, кому доступ выдан вручную (команда боту «/вручную»), пока срок не прошёл.</div></div>`;
@@ -98,10 +99,11 @@ function render() {
     h += `<div class="card"><h2>Сайт</h2>
       <div class="row"><span class="k">Платят сейчас</span><span class="big">${n(paying)}</span></div>
       ${row("WayForPay / Lava / Tribute", `${n(a.wayforpay)} / ${n(a.lava)} / ${n(a.tribute)}`)}
+      ${num(now.site_in_club) ? row("из них в клубе (уже в «В клубе сейчас»)", n(now.site_in_club)) : ""}
       ${row("Продление выключено", n(off))}
       ${row("Ближайшее списание", ch.next ? day(ch.next) : "нет")}
       ${row("Списаний в ближайшие 7 дней", n(ch.count))}
-      <div class="note">Наши тестовые оплаты не считаются.</div></div>`;
+      <div class="note">Наши тестовые оплаты не считаются. Кто платит на сайте и при этом в клубе, есть и здесь, и в «В клубе сейчас»: при сложении двух цифр «из них в клубе» вычесть.</div></div>`;
   } else {
     h += `<div class="card alarm"><h2>Сайт</h2>${row("Не удалось получить цифры", "?")}</div>`;
   }
