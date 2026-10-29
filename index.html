@@ -72,9 +72,10 @@ function render() {
     ${row("Пришло " + label[P], n(came) + aq("zenedu_came", "tribute_came"))}
     ${row("Ушло " + label[P], n(gone) + aq("zenedu_cancel_self", "zenedu_cancel_payment", "zenedu_cancel_other", "tribute_ended"))}
     ${row("Итог " + label[P], signed(came - gone) + aq("zenedu_came", "tribute_came", "zenedu_cancel_self", "tribute_ended"))}
+    ${club.manual ? row("из них вручную (оплата мимо Zenedu и Tribute)", n(club.manual)) : ""}
     ${d.channel_now != null ? row("В канале (по Телеграму)", n(d.channel_now)) : ""}
     ${(d.channel || {}).unpaid != null ? row("из них без оплаты в системах", n(d.channel.unpaid) + `<span class="ap">по сверке ${day(d.channel.day)}, в канале тогда было ${n(d.channel.members_at_check)}</span>`) : ""}
-    <div class="note">Каждая женщина считается один раз, даже если платит и в Zenedu, и в Tribute (таких ${n(club.both)}). Сюда входят и те, кто отменил продление, но оплаченный срок ещё идёт.</div></div>`;
+    <div class="note">Каждая женщина считается один раз, даже если платит и в Zenedu, и в Tribute (таких ${n(club.both)}). Сюда входят и те, кто отменил продление, но оплаченный срок ещё идёт. И те, кому доступ выдан вручную (команда боту «/вручную»), пока срок не прошёл.</div></div>`;
   h += `<div class="card"><h2>Zenedu</h2>
     <div class="row"><span class="k">Сейчас</span><span><span class="big">${n(z.active)}</span>${delta(z.active, per.zenedu_active_then)}</span></div>
     ${d.zenedu_with_access != null && z.active != null && d.zenedu_with_access > z.active ? row("Отменили, но оплаченный срок ещё идёт", n(d.zenedu_with_access - z.active)) : ""}
